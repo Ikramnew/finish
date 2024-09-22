@@ -258,7 +258,7 @@ async function uploadFileToCloudinary(file) {
 async function postProject(req, res) {
     const { project_name, start_date, end_date, description, technologies = [] } = req.body;
     const userId = req.session.user.id;
-
+    const user = req.session.user;
     try {
         const imageUrl = req.file ? await uploadFileToCloudinary(req.file) : 'https://default.image.url'; // Ganti dengan URL gambar default
 

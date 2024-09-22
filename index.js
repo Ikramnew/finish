@@ -1,18 +1,27 @@
 const express = require("express");
 const path = require("path");
-const config = require("./config/config.json");
-const { Sequelize, QueryTypes } = require("sequelize");
 const bcrypt = require('bcryptjs');
-const Project = require('./models/project');
-const User = require('./models/user');
-const saltRounds = 10;
-const app = express();
-const port = 3000;
-const session = require('express-session');
 const multer = require('multer');
-// Initialize Sequelize
-const sequelize = new Sequelize(config.development);
-// Configure multer storage
+const session = require('express-session');
+const { createClient } = require("@supabase/supabase-js");
+
+const app = express();
+const PORT = 5000 || process.env.PORT;
+
+const SUPABASE_URL = "https://hzfiosbwnhkohwasfmxp.supabase.co"
+const SUPABASE_SERVICE_ROLE = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh6Zmlvc2J3bmhrb2h3YXNmbXhwIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTcyNjk2MjM1MiwiZXhwIjoyMDQyNTM4MzUyfQ.ucQkz54Qa3cs7eXlwEzRQBr-q-hSz-UH8eLzN7uVEZI";
+
+const db = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE);
+const saltRounds = 10;
+
+// Set up view engine and static files
+app.set("view engine", "hbs");
+app.set("views", path.join(__dirname, "./views"));
+app.use("/assets", express.static(path.join(__dirname, "./assets")));
+app.use('/uploads', express.static(path.join(__dirname, './uploads')));
+app.use(express.urlencoded({ extended: true }));
+
+// Initialize multer with the configured storage for file uploads
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
         cb(null, path.join(__dirname, 'uploads')); // Directory where files will be stored
@@ -22,23 +31,7 @@ const storage = multer.diskStorage({
         cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
     }
 });
-const hbs = require('hbs');
-
-// Register the helper for formatting dates
-hbs.registerHelper('formatDate', function(date) {
-  const formattedDate = new Date(date).toISOString().split('T')[0]; // Format as 'YYYY-MM-DD'
-  return formattedDate;
-});
-
-// Initialize multer with the configured storage
 const upload = multer({ storage: storage });
-
-// Set up view engine and static files
-app.set("view engine", "hbs");
-app.set("views", path.join(__dirname, "./views"));
-app.use("/assets", express.static(path.join(__dirname, "./assets")));
-app.use('/uploads', express.static(path.join(__dirname, './uploads')));
-app.use(express.urlencoded({ extended: true }));
 
 // Session management
 app.use(session({
@@ -47,12 +40,6 @@ app.use(session({
     saveUninitialized: true,
     cookie: { maxAge: 1000 * 60 * 60 * 24 } // 1 day
 }));
-
-// Middleware to log session data
-app.use((req, res, next) => {
-    console.log('Session Data:', req.session);
-    next(); // Proceed to the next middleware or route handler
-});
 
 // Routes
 app.get("/", home);
@@ -71,18 +58,18 @@ app.post("/register", register);
 app.post("/login", login);
 app.get("/logout", logout);
 
-// Register user
+// Register user with Supabase
 async function register(req, res) {
     const { name, email, password } = req.body;
     try {
         const hashedPassword = await bcrypt.hash(password, saltRounds);
-        await sequelize.query(
-            'INSERT INTO users (name, email, password) VALUES (:name, :email, :password)',
-            {
-                replacements: { name, email, password: hashedPassword },
-                type: QueryTypes.INSERT
-            }
-        );
+        const { data, error } = await db
+            .from('users')
+            .insert([{ name, email, password: hashedPassword }]);
+
+        if (error) {
+            throw error;
+        }
         res.redirect('/login');
     } catch (error) {
         console.error("Error registering user:", error);
@@ -94,20 +81,20 @@ async function register(req, res) {
 async function login(req, res) {
     const { email, password } = req.body;
     try {
-        const [user] = await sequelize.query(
-            'SELECT * FROM users WHERE email = :email',
-            {
-                replacements: { email },
-                type: QueryTypes.SELECT
-            }
-        );
+        const { data: users, error } = await db
+            .from('users')
+            .select('*')
+            .eq('email', email)
+            .limit(1);
 
-        if (!user) {
+        if (error || users.length === 0) {
             req.session.errorMessage = 'User not found';
             return res.redirect('/login');
         }
 
+        const user = users[0];
         const isMatch = await bcrypt.compare(password, user.password);
+
         if (!isMatch) {
             req.session.errorMessage = 'Incorrect password';
             return res.redirect('/login');
@@ -136,36 +123,40 @@ function logout(req, res) {
 // Show projects
 async function projectShow(req, res) {
     try {
-        const query = `
-            SELECT public.project.*, public.users.name AS author 
-            FROM public.project 
-            INNER JOIN public.users ON public.project."userId" = public.users.id;
-        `;
-        const result = await sequelize.query(query, { type: QueryTypes.SELECT });
+        const { data: projects, error } = await db
+            .from('project')
+            .select('*, users (name)');
+
+        if (error) {
+            throw error;
+        }
 
         const user = req.session.user;
         const successMessage = req.session.successMessage || null;
+        req.session.successMessage = null;
 
-        req.session.successMessage = null;  // Clear the success message after showing it
-
-        res.render("project", { projects: result, user, successMessage });
+        res.render("project", { projects, user, successMessage });
     } catch (error) {
         console.error("Error fetching projects:", error);
         res.status(500).send("Error fetching projects");
     }
 }
 
-
-
 // Project details
 async function projectDetail(req, res) {
     const { id } = req.params;
     try {
-        const user = req.session.user;
-        const project = await Project.findByPk(id);
-        if (!project) {
+        const { data: project, error } = await db
+            .from('project')
+            .select('*')
+            .eq('id', id)
+            .single();
+
+        if (error || !project) {
             return res.status(404).send("Project not found");
         }
+
+        const user = req.session.user;
         res.render("detailProject", { project, user });
     } catch (error) {
         console.error("Error fetching project details:", error);
@@ -177,8 +168,16 @@ async function projectDetail(req, res) {
 async function projectDelete(req, res) {
     const { id } = req.params;
     try {
-        await Project.destroy({ where: { id } });
-        req.session.successMessage = "Project deleted successfully!";  // Set success message
+        const { error } = await db
+            .from('project')
+            .delete()
+            .eq('id', id);
+
+        if (error) {
+            throw error;
+        }
+
+        req.session.successMessage = "Project deleted successfully!";
         res.redirect("/project");
     } catch (error) {
         console.error("Error deleting project:", error);
@@ -186,15 +185,20 @@ async function projectDelete(req, res) {
     }
 }
 
-
 // Edit project view
 async function projectEditView(req, res) {
     const { id } = req.params;
     try {
-        const project = await Project.findByPk(id);
-        if (!project) {
+        const { data: project, error } = await db
+            .from('project')
+            .select('*')
+            .eq('id', id)
+            .single();
+
+        if (error || !project) {
             return res.status(404).send("Project not found");
         }
+
         res.render("editproject", { project });
     } catch (error) {
         console.error("Error fetching project for edit view:", error);
@@ -209,18 +213,23 @@ async function projectEdit(req, res) {
     try {
         const image = req.file ? `/uploads/${req.file.filename}` : req.body.existingImage;
 
-        await Project.update({
-            project_name,
-            description,
-            start_date: new Date(start_date),
-            end_date: new Date(end_date),
-            technologies,
-            image
-        }, {
-            where: { id }
-        });
+        const { error } = await db
+            .from('project')
+            .update({
+                project_name,
+                description,
+                start_date: new Date(start_date),
+                end_date: new Date(end_date),
+                technologies,
+                image
+            })
+            .eq('id', id);
 
-        req.session.successMessage = "Project updated successfully!";  // Set success message
+        if (error) {
+            throw error;
+        }
+
+        req.session.successMessage = "Project updated successfully!";
         res.redirect("/project");
     } catch (error) {
         console.error("Error updating project:", error);
@@ -238,24 +247,29 @@ async function postProject(req, res) {
     try {
         const image = req.file ? `/uploads/${req.file.filename}` : defaultImage;
 
-        await Project.create({
-            project_name,
-            start_date: new Date(start_date),
-            end_date: new Date(end_date),
-            description,
-            technologies,
-            image,
-            userId
-        });
+        const { error } = await db
+            .from('project')
+            .insert({
+                project_name,
+                start_date: new Date(start_date),
+                end_date: new Date(end_date),
+                description,
+                technologies,
+                image,
+                userid:userId,
+            });
 
-        req.session.successMessage = "Project added successfully!";  
+        if (error) {
+            throw error;
+        }
+
+        req.session.successMessage = "Project added successfully!";
         res.redirect("/project");
     } catch (error) {
         console.error("Error adding project:", error);
         res.status(500).send("Error adding project");
     }
 }
-
 
 // Contact page
 function contact(req, res) {
@@ -267,12 +281,9 @@ function contact(req, res) {
 function home(req, res) {
     const user = req.session.user;
     const errorMessage = req.session.errorMessage || null;
-    const successMessage = req.session.successMessage || null;
-
     req.session.errorMessage = null;
-    req.session.successMessage = null;
 
-    res.render("index", { user, errorMessage, successMessage });
+    res.render("index", { user, errorMessage });
 }
 
 // Testimonial page
@@ -281,7 +292,7 @@ function testimonial(req, res) {
     res.render("testimonial", { user });
 }
 
-// Add project page
+// Project page
 function project(req, res) {
     const user = req.session.user;
     res.render("addproject", { user });
@@ -290,12 +301,8 @@ function project(req, res) {
 // Login view
 function loginView(req, res) {
     const errorMessage = req.session.errorMessage || null;
-    const successMessage = req.session.successMessage || null;
-
     req.session.errorMessage = null;
-    req.session.successMessage = null;
-
-    res.render("login", { errorMessage, successMessage });
+    res.render("login", { errorMessage });
 }
 
 // Register view
@@ -304,6 +311,6 @@ function registerView(req, res) {
 }
 
 // Start server
-app.listen(port, () => {
-    console.log(`Server running at http://localhost:${port}`);
+app.listen(PORT, () => {
+    console.log(`Server running at http://localhost:${PORT}`);
 });

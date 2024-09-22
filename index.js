@@ -4,38 +4,38 @@ const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const session = require('express-session');
 const { createClient } = require("@supabase/supabase-js");
-
+const hbs = require("hbs");
+const cloudinary = require('cloudinary').v2;
 const app = express();
-const PORT = 5000 || process.env.PORT;
-
-const SUPABASE_URL = "https://hzfiosbwnhkohwasfmxp.supabase.co"
-const SUPABASE_SERVICE_ROLE = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh6Zmlvc2J3bmhrb2h3YXNmbXhwIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTcyNjk2MjM1MiwiZXhwIjoyMDQyNTM4MzUyfQ.ucQkz54Qa3cs7eXlwEzRQBr-q-hSz-UH8eLzN7uVEZI";
-
+const PORT = process.env.PORT || 5000;
+const SUPABASE_URL = "https://hzfiosbwnhkohwasfmxp.supabase.co";
+const SUPABASE_SERVICE_ROLE = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh6Zmlvc2J3bmhrb2h3YXNmbXhwIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTcyNjk2MjM1MiwiZXhwIjoyMDQyNTM4MzUyfQ.ucQkz54Qa3cs7eXlwEzRQBr-q-hSz-UH8eLzN7uVEZI"; 
 const db = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE);
 const saltRounds = 10;
 
+cloudinary.config({
+    cloud_name: 'dcxwl1qat',
+    api_key: '912763541539931', // Ganti dengan API key Anda
+    api_secret: 'gicrvStURE3DGzWoM7HW1GM51f8', // Ganti dengan API secret Anda
+});
+
+hbs.registerHelper('formatDate', function(date) {
+    const options = { year: 'numeric', month: 'long', day: 'numeric' };
+    return new Date(date).toLocaleDateString('id-ID', options); // Ganti 'id-ID' dengan kode lokal yang sesuai jika perlu
+});
 // Set up view engine and static files
 app.set("view engine", "hbs");
 app.set("views", path.join(__dirname, "./views"));
 app.use("/assets", express.static(path.join(__dirname, "./assets")));
-app.use('/uploads', express.static(path.join(__dirname, './uploads')));
 app.use(express.urlencoded({ extended: true }));
 
-// Initialize multer with the configured storage for file uploads
-const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        cb(null, path.join(__dirname, 'uploads')); // Directory where files will be stored
-    },
-    filename: function (req, file, cb) {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
-    }
-});
+// Initialize multer to handle file uploads
+const storage = multer.memoryStorage(); // Use memory storage for uploads
 const upload = multer({ storage: storage });
 
 // Session management
 app.use(session({
-    secret: 'ikram', 
+    secret: 'ikram',
     resave: false,
     saveUninitialized: true,
     cookie: { maxAge: 1000 * 60 * 60 * 24 } // 1 day
@@ -210,8 +210,9 @@ async function projectEditView(req, res) {
 async function projectEdit(req, res) {
     const { id } = req.params;
     const { project_name, description, start_date, end_date, technologies = [] } = req.body;
+
     try {
-        const image = req.file ? `/uploads/${req.file.filename}` : req.body.existingImage;
+        const image = req.file ? await uploadFileToCloudinary(req.file) : req.body.existingImage;
 
         const { error } = await db
             .from('project')
@@ -237,15 +238,29 @@ async function projectEdit(req, res) {
     }
 }
 
+// Upload file to Cloudinary
+async function uploadFileToCloudinary(file) {
+    return new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+            { resource_type: 'auto' },
+            (error, result) => {
+                if (error) {
+                    return reject(new Error("Cloudinary upload failed: " + error.message));
+                }
+                resolve(result.secure_url);
+            }
+        );
+        stream.end(file.buffer); // Menggunakan buffer untuk upload
+    });
+}
+
 // Add project with file upload
 async function postProject(req, res) {
     const { project_name, start_date, end_date, description, technologies = [] } = req.body;
-    const defaultImage = 'https://wallpapers.com/images/hd/gojo-satoru-side-profile-3xdwa05tznpyotz9.jpg';
-    
     const userId = req.session.user.id;
 
     try {
-        const image = req.file ? `/uploads/${req.file.filename}` : defaultImage;
+        const imageUrl = req.file ? await uploadFileToCloudinary(req.file) : 'https://default.image.url'; // Ganti dengan URL gambar default
 
         const { error } = await db
             .from('project')
@@ -255,8 +270,8 @@ async function postProject(req, res) {
                 end_date: new Date(end_date),
                 description,
                 technologies,
-                image,
-                userid:userId,
+                image: imageUrl,
+                userid: userId,
             });
 
         if (error) {

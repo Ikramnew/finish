@@ -53,9 +53,10 @@ cloudinary.config({
     api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-hbs.registerHelper('formatDate', function(date) {
-    const options = { year: 'numeric', month: 'long', day: 'numeric' };
-    return new Date(date).toLocaleDateString('id-ID', options);
+hbs.registerHelper('formatDate', function(dateString) {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toISOString().split('T')[0]; 
 });
 hbs.registerHelper('includes', function(array, value) {
     return array && array.includes(value);

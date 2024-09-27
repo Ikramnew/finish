@@ -17,7 +17,7 @@
         <img src="https://dumbways.id/assets/images/brandred.png" alt="Logo" class="img-fluid" style="height: 30px;">
       </a>
 
-      <!-- burger-->
+      <!-- Burger -->
       <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
         <span class="navbar-toggler-icon"></span>
       </button>
@@ -36,17 +36,15 @@
             </li>
           </ul>
 
-        <!-- tombol kanan -->
-       <ul class="navbar-nav ml-auto">
+        <!-- Right Buttons -->
+        <ul class="navbar-nav ml-auto">
         {{#if user}} 
-          
-          <li class="nav-item"></li>
+          <li class="nav-item">
             <span class="nav-link text-white">Welcome, {{user.name}}</span>
           </li>
           <li class="nav-item">
             <a class="nav-link text-white fw-bold" href="/contact">Contact</a>
           </li>
-          
           <li class="nav-item">
             <a class="btn btn-danger fw-bold" href="/logout">Logout</a>
           </li>
@@ -84,11 +82,11 @@
               <div class="row">
                 <div class="col-md-6 mb-3">
                   <label for="startDate" class="form-label">Start Date</label>
-                  <input type="date" class="form-control" id="startDate" name="start_date" value="{{formatDate project.start_date}}">
+                  <input type="date" class="form-control" id="startDate" name="start_date" value="{{ project.start_date}}">
                 </div>
                 <div class="col-md-6 mb-3">
                   <label for="endDate" class="form-label">End Date</label>
-                  <input type="date" class="form-control" id="endDate" name="end_date" value="{{formatDate project.start_date}}">
+                  <input type="date" class="form-control" id="endDate" name="end_date" value="{{ project.end_date}}">
                 </div>
               </div>
 
@@ -98,21 +96,21 @@
                 <div class="row">
                   <div class="col-md-6">
                     <div class="form-check form-check-inline">
-                      <input class="form-check-input" type="checkbox" id="html" value="HTML" name="technologies">
+                      <input class="form-check-input" type="checkbox" id="html" value="HTML" name="technologies" {{#if (includes project.technologies "HTML")}}checked{{/if}}>
                       <label class="form-check-label" for="html">HTML</label>
                     </div>
                     <div class="form-check form-check-inline">
-                      <input class="form-check-input" type="checkbox" id="css" value="CSS" name="technologies" >
+                      <input class="form-check-input" type="checkbox" id="css" value="CSS" name="technologies" {{#if (includes project.technologies "CSS")}}checked{{/if}}>
                       <label class="form-check-label" for="css">CSS</label>
                     </div>
                   </div>
                   <div class="col-md-6">
                     <div class="form-check form-check-inline">
-                      <input class="form-check-input" type="checkbox" id="js" value="JavaScript" name="technologies" >
+                      <input class="form-check-input" type="checkbox" id="js" value="JavaScript" name="technologies" {{#if (includes project.technologies "JavaScript")}}checked{{/if}}>
                       <label class="form-check-label" for="js">JavaScript</label>
                     </div>
                     <div class="form-check form-check-inline">
-                      <input class="form-check-input" type="checkbox" id="nodejs" value="Node.js" name="technologies" >
+                      <input class="form-check-input" type="checkbox" id="nodejs" value="Node.js" name="technologies" {{#if (includes project.technologies "Node.js")}}checked{{/if}}>
                       <label class="form-check-label" for="nodejs">Node.js</label>
                     </div>
                   </div>

@@ -41,7 +41,7 @@ const Project = sequelize.define('Project', {
     image: { type: DataTypes.STRING },
 }, {
     tableName: 'project', 
-    timestamps: false,
+    timestamps: true,
 });
 
 User.hasMany(Project, { foreignKey: 'userid' });
@@ -57,6 +57,10 @@ hbs.registerHelper('formatDate', function(date) {
     const options = { year: 'numeric', month: 'long', day: 'numeric' };
     return new Date(date).toLocaleDateString('id-ID', options);
 });
+hbs.registerHelper('includes', function(array, value) {
+    return array && array.includes(value);
+  });
+  
 
 app.set("view engine", "hbs");
 app.set("views", path.join(__dirname, "./views"));
@@ -143,7 +147,12 @@ function logout(req, res) {
 async function projectShow(req, res) {
     try {
         const projects = await Project.findAll({
-            include: { model: User, attributes: ['name'] }
+            include: { model: User,
+                 attributes: ['name'] },
+            attributes:
+             {
+                include: ['createdAt'] 
+            }
         });
 
         const user = req.session.user;

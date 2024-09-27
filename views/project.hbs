@@ -109,8 +109,9 @@
     <i class="fas fa-calendar-alt"></i>Start Date : <span class="start-date">{{start_date}}</span><br>
     <i class="fas fa-calendar-check"></i>End Date : <span class="end-date">{{end_date}}</span><br>
     <i class="fas fa-hourglass-half"></i> <span class="duration">Duration: X Days</span><br>
-    <i class="fas fa-user"></i> Author : <span class="duration">{{User.name}}</span><br>
-    <i class="fas fa-cogs"></i> <span class="tech-icons">{{technologies}}</span>
+    <i class="fas fa-user"></i> Author : <span class="duration">{{users.name}}</span><br>
+    <i class="fas fa-cogs"></i>Technologies: <span class="tech-icons">{{technologies}}</span><br>
+    <i class="fas fa-clock"></i> Posted: <span class="posted-time" data-time="{{createdAt}}"></span>
   </p>
   
   
@@ -130,5 +131,46 @@
   </div>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script src="/assets/js/project.js"></script>
+  <script>
+    
+function getDistanceTime(timePost) {
+    const timeNow = new Date();
+    const distance = timeNow - new Date(timePost); // Convert to Date
+
+    const seconds = Math.floor(distance / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+
+    if (days > 1) {
+        return `${days} days ago`;
+    } else if (days === 1) {
+        return `1 day ago`;
+    } else if (hours > 1) {
+        return `${hours} hours ago`;
+    } else if (hours === 1) {
+        return `1 hour ago`;
+    } else if (minutes > 1) {
+        return `${minutes} minutes ago`;
+    } else if (minutes === 1) {
+        return `1 minute ago`;
+    } else {
+        return `${seconds} seconds ago`;
+    }
+}
+
+// Function to set the posted time on the page
+function setPostedTimes() {
+    const postedTimeElements = document.querySelectorAll('.posted-time');
+    postedTimeElements.forEach(element => {
+        const timePost = element.getAttribute('data-time');
+        element.textContent = getDistanceTime(timePost);
+    });
+}
+
+// Call the function on DOMContentLoaded
+document.addEventListener('DOMContentLoaded', setPostedTimes);
+
+  </script>
 </body>
 </html>
